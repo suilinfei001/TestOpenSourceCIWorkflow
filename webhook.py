@@ -5,7 +5,7 @@ import hmac
 import os
 import sys
 
-# 用于验证GitHub webhook的密钥，在实际使用中应该从环境变量获取
+# 用于验证GitHub webhook的密钥，在实际使用中应该从环境变量获取!!!
 WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'your-secret-key')
 
 class WebhookHandler(http.server.BaseHTTPRequestHandler):
