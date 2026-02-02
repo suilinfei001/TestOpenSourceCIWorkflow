@@ -37,18 +37,18 @@ jobs:
           
           # 构建JSON数据
           cat > event_data.json << EOF
-          {
-            "event_type": "push",
-            "repository": "$REPOSITORY",
-            "branch": "$BRANCH",
-            "commit_sha": "$COMMIT_SHA",
-            "commit_message": "$COMMIT_MESSAGE",
-            "pusher": "$PUSHER",
-            "commit_count": $COMMIT_COUNT,
-            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-          EOF
+{
+  "event_type": "push",
+  "repository": "$REPOSITORY",
+  "branch": "$BRANCH",
+  "commit_sha": "$COMMIT_SHA",
+  "commit_message": "$COMMIT_MESSAGE",
+  "pusher": "$PUSHER",
+  "commit_count": $COMMIT_COUNT,
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+}
+EOF
           
         elif [[ "$EVENT_TYPE" == "pull_request" ]]; then
           # 提取PR事件信息
@@ -65,22 +65,22 @@ jobs:
           
           # 构建JSON数据
           cat > event_data.json << EOF
-          {
-            "event_type": "pull_request",
-            "repository": "$REPOSITORY",
-            "pr_number": $PR_NUMBER,
-            "pr_title": "$PR_TITLE",
-            "pr_author": "$PR_AUTHOR",
-            "pr_state": "$PR_STATE",
-            "pr_action": "$PR_ACTION",
-            "source_branch": "$SOURCE_BRANCH",
-            "target_branch": "$TARGET_BRANCH",
-            "pr_url": "$PR_URL",
-            "pr_description": "$PR_DESCRIPTION",
-            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-          EOF
+{
+  "event_type": "pull_request",
+  "repository": "$REPOSITORY",
+  "pr_number": $PR_NUMBER,
+  "pr_title": "$PR_TITLE",
+  "pr_author": "$PR_AUTHOR",
+  "pr_state": "$PR_STATE",
+  "pr_action": "$PR_ACTION",
+  "source_branch": "$SOURCE_BRANCH",
+  "target_branch": "$TARGET_BRANCH",
+  "pr_url": "$PR_URL",
+  "pr_description": "$PR_DESCRIPTION",
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+}
+EOF
         fi
         
         # 显示构建的数据
