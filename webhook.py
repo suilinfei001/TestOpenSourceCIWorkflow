@@ -17,7 +17,7 @@ WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'your-secret-key')
 class WebhookHandler(http.server.BaseHTTPRequestHandler):
     """处理GitHub webhook事件的HTTP处理器"""
 
-    def do_POST(self):
+    def do_POST(self):  # pylint: disable=invalid-name
         """处理POST请求"""
         if self.path != '/webhook':
             self.send_error(404, 'Not Found')
@@ -118,11 +118,11 @@ def run_server(server_port=5000):
 
 if __name__ == '__main__':
     # 从命令行参数获取端口号
-    port = 5000
+    PORT = 5000
     if len(sys.argv) > 1:
         try:
-            port = int(sys.argv[1])
+            PORT = int(sys.argv[1])
         except ValueError:
             pass
 
-    run_server(port)
+    run_server(PORT)
