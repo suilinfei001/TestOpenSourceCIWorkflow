@@ -1,0 +1,126 @@
+name: Webhook Event Notifier
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, closed]
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    
+    - name: Prepare event data
+      id: prepare-data
+      run: |
+        # 提取事件类型
+        EVENT_TYPE=${{ github.event_name }}
+        
+        if [[ "$EVENT_TYPE" == "push" ]]; then
+          # 提取push事件信息
+          REPOSITORY=${{ github.repository }}
+          BRANCH=${{ github.ref_name }}
+          COMMIT_SHA=${{ github.sha }}
+          COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+          PUSHER=${{ github.actor }}
+          COMMIT_COUNT=$(git rev-list --count ${{ github.event.before }}..${{ github.sha }})
+          
+          # 构建JSON数据
+          cat > event_data.json << EOF
+          {
+            "event_type": "push",
+            "repository": "$REPOSITORY",
+            "branch": "$BRANCH",
+            "commit_sha": "$COMMIT_SHA",
+            "commit_message": "$COMMIT_MESSAGE",
+            "pusher": "$PUSHER",
+            "commit_count": $COMMIT_COUNT,
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+          
+        elif [[ "$EVENT_TYPE" == "pull_request" ]]; then
+          # 提取PR事件信息
+          REPOSITORY=${{ github.repository }}
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          PR_TITLE=${{ github.event.pull_request.title }}
+          PR_AUTHOR=${{ github.event.pull_request.user.login }}
+          PR_STATE=${{ github.event.pull_request.state }}
+          PR_ACTION=${{ github.event.action }}
+          SOURCE_BRANCH=${{ github.event.pull_request.head.ref }}
+          TARGET_BRANCH=${{ github.event.pull_request.base.ref }}
+          PR_URL=${{ github.event.pull_request.html_url }}
+          PR_DESCRIPTION=${{ github.event.pull_request.body }}
+          
+          # 构建JSON数据
+          cat > event_data.json << EOF
+          {
+            "event_type": "pull_request",
+            "repository": "$REPOSITORY",
+            "pr_number": $PR_NUMBER,
+            "pr_title": "$PR_TITLE",
+            "pr_author": "$PR_AUTHOR",
+            "pr_state": "$PR_STATE",
+            "pr_action": "$PR_ACTION",
+            "source_branch": "$SOURCE_BRANCH",
+            "target_branch": "$TARGET_BRANCH",
+            "pr_url": "$PR_URL",
+            "pr_description": "$PR_DESCRIPTION",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+        fi
+        
+        # 显示构建的数据
+        echo "Event data prepared:"
+        cat event_data.json
+        
+        # 将数据设置为输出，以便后续步骤使用
+        EVENT_DATA=$(cat event_data.json)
+        echo "event_data=$EVENT_DATA" >> $GITHUB_OUTPUT
+    
+    - name: Send event notification
+      env:
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        EVENT_DATA: ${{ steps.prepare-data.outputs.event_data }}
+      run: |
+        # 检查是否配置了webhook URL
+        if [[ -z "$WEBHOOK_URL" ]]; then
+          echo "Warning: WEBHOOK_URL secret not set. Skipping notification."
+          echo "Please set WEBHOOK_URL secret in repository settings."
+          exit 0
+        fi
+        
+        # 发送HTTP POST请求
+        echo "Sending event notification to $WEBHOOK_URL"
+        
+        # 使用curl发送请求
+        RESPONSE=$(curl -s -X POST \
+          -H "Content-Type: application/json" \
+          -H "X-GitHub-Event: ${{ github.event_name }}" \
+          -H "X-GitHub-Repository: ${{ github.repository }}" \
+          -d "$EVENT_DATA" \
+          "$WEBHOOK_URL")
+        
+        # 显示响应
+        echo "Response: $RESPONSE"
+        echo "Notification sent successfully!"
+    
+    - name: Save event data as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: event-data
+        path: event_data.json
+        retention-days: 7
