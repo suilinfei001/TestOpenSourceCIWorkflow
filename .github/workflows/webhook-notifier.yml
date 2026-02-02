@@ -18,24 +18,51 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 2
+        fetch-depth: 0
     
     - name: Prepare event data
       id: prepare-data
       run: |
+        echo "=== 开始准备事件数据 ==="
+        echo "事件类型: ${{ github.event_name }}"
+        
         if [ "${{ github.event_name }}" = "push" ]; then
+          echo "Push事件: 比较 ${{ github.event.before }}..${{ github.sha }}"
           # 获取变更文件列表并限制最多50个
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | head -50 | tr '\n' ',' | sed 's/,$//')
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>&1 | head -50 | tr '\n' ',' | sed 's/,$//')
+          echo "变更文件: $CHANGED_FILES"
           
           echo '{"event_type": "push", "repository": "${{ github.repository }}", "branch": "${{ github.ref_name }}", "commit_sha": "${{ github.sha }}", "pusher": "${{ github.actor }}", "changed_files": "'"$CHANGED_FILES"'", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > event_data.json
         elif [ "${{ github.event_name }}" = "pull_request" ]; then
-          git fetch origin ${{ github.event.pull_request.base.ref }}
-          # 获取变更文件列表并限制最多50个
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | head -50 | tr '\n' ',' | sed 's/,$//')
+          echo "PR事件: ${PR_NUMBER}"
+          echo "源分支: ${{ github.event.pull_request.head.ref }}"
+          echo "目标分支: ${{ github.event.pull_request.base.ref }}"
+          echo "源SHA: ${{ github.event.pull_request.head.sha }}"
+          echo "目标SHA: ${{ github.event.pull_request.base.sha }}"
+          
+          # 尝试获取变更文件的多种方法
+          echo "=== 尝试方法1: 使用PR的head和base SHA ==="
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} 2>&1 | head -50 | tr '\n' ',' | sed 's/,$//')
+          
+          if [ -z "$CHANGED_FILES" ] || [ "$CHANGED_FILES" = "fatal: bad object" ]; then
+            echo "=== 尝试方法2: 拉取远程分支并比较 ==="
+            git fetch origin ${{ github.event.pull_request.base.ref }} 2>&1
+            git fetch origin ${{ github.event.pull_request.head.ref }} 2>&1
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...origin/${{ github.event.pull_request.head.ref }} 2>&1 | head -50 | tr '\n' ',' | sed 's/,$//')
+          fi
+          
+          if [ -z "$CHANGED_FILES" ] || [ "$CHANGED_FILES" = "fatal: bad object" ]; then
+            echo "=== 尝试方法3: 使用当前HEAD与目标分支比较 ==="
+            git fetch origin ${{ github.event.pull_request.base.ref }} 2>&1
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }} 2>&1 | head -50 | tr '\n' ',' | sed 's/,$//')
+          fi
+          
+          echo "变更文件: $CHANGED_FILES"
           
           echo '{"event_type": "pull_request", "repository": "${{ github.repository }}", "pr_number": "${{ github.event.pull_request.number }}", "pr_title": "${{ github.event.pull_request.title }}", "pr_author": "${{ github.event.pull_request.user.login }}", "pr_state": "${{ github.event.pull_request.state }}", "pr_action": "${{ github.event.action }}", "source_branch": "${{ github.event.pull_request.head.ref }}", "target_branch": "${{ github.event.pull_request.base.ref }}", "pr_url": "${{ github.event.pull_request.html_url }}", "changed_files": "'"$CHANGED_FILES"'", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > event_data.json
         fi
         
+        echo "=== 事件数据准备完成 ==="
         echo "Event data prepared:"
         cat event_data.json
         
