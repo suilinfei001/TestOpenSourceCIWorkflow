@@ -17,14 +17,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
     
     - name: Prepare event data
       id: prepare-data
       run: |
         if [ "${{ github.event_name }}" = "push" ]; then
-          echo '{"event_type": "push", "repository": "${{ github.repository }}", "branch": "${{ github.ref_name }}", "commit_sha": "${{ github.sha }}", "pusher": "${{ github.actor }}", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'", "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' > event_data.json
+          # 获取变更文件列表并限制最多50个
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | head -50 | tr '\n' ',' | sed 's/,$//')
+          
+          echo '{"event_type": "push", "repository": "${{ github.repository }}", "branch": "${{ github.ref_name }}", "commit_sha": "${{ github.sha }}", "pusher": "${{ github.actor }}", "changed_files": "'"$CHANGED_FILES"'", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > event_data.json
         elif [ "${{ github.event_name }}" = "pull_request" ]; then
-          echo '{"event_type": "pull_request", "repository": "${{ github.repository }}", "pr_number": "${{ github.event.pull_request.number }}", "pr_title": "${{ github.event.pull_request.title }}", "pr_author": "${{ github.event.pull_request.user.login }}", "pr_state": "${{ github.event.pull_request.state }}", "pr_action": "${{ github.event.action }}", "source_branch": "${{ github.event.pull_request.head.ref }}", "target_branch": "${{ github.event.pull_request.base.ref }}", "pr_url": "${{ github.event.pull_request.html_url }}", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'", "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' > event_data.json
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          # 获取变更文件列表并限制最多50个
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | head -50 | tr '\n' ',' | sed 's/,$//')
+          
+          echo '{"event_type": "pull_request", "repository": "${{ github.repository }}", "pr_number": "${{ github.event.pull_request.number }}", "pr_title": "${{ github.event.pull_request.title }}", "pr_author": "${{ github.event.pull_request.user.login }}", "pr_state": "${{ github.event.pull_request.state }}", "pr_action": "${{ github.event.action }}", "source_branch": "${{ github.event.pull_request.head.ref }}", "target_branch": "${{ github.event.pull_request.base.ref }}", "pr_url": "${{ github.event.pull_request.html_url }}", "changed_files": "'"$CHANGED_FILES"'", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > event_data.json
         fi
         
         echo "Event data prepared:"
