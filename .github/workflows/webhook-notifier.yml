@@ -1,0 +1,62 @@
+name: Webhook Event Notifier
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - closed
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Prepare event data
+      id: prepare-data
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+          echo '{"event_type": "push", "repository": "${{ github.repository }}", "branch": "${{ github.ref_name }}", "commit_sha": "${{ github.sha }}", "pusher": "${{ github.actor }}", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'", "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' > event_data.json
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo '{"event_type": "pull_request", "repository": "${{ github.repository }}", "pr_number": "${{ github.event.pull_request.number }}", "pr_title": "${{ github.event.pull_request.title }}", "pr_author": "${{ github.event.pull_request.user.login }}", "pr_state": "${{ github.event.pull_request.state }}", "pr_action": "${{ github.event.action }}", "source_branch": "${{ github.event.pull_request.head.ref }}", "target_branch": "${{ github.event.pull_request.base.ref }}", "pr_url": "${{ github.event.pull_request.html_url }}", "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'", "workflow_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' > event_data.json
+        fi
+        
+        echo "Event data prepared:"
+        cat event_data.json
+        
+        EVENT_DATA=$(cat event_data.json)
+        echo "event_data=$EVENT_DATA" >> $GITHUB_OUTPUT
+    
+    - name: Send event notification
+      env:
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        EVENT_DATA: ${{ steps.prepare-data.outputs.event_data }}
+      run: |
+        if [ -z "$WEBHOOK_URL" ]; then
+          echo "Warning: WEBHOOK_URL secret not set. Skipping notification."
+          exit 0
+        fi
+        
+        echo "Sending event notification to $WEBHOOK_URL"
+        
+        curl -s -X POST \
+          -H "Content-Type: application/json" \
+          -H "X-GitHub-Event: ${{ github.event_name }}" \
+          -H "X-GitHub-Repository: ${{ github.repository }}" \
+          -d "$EVENT_DATA" \
+          "$WEBHOOK_URL"
+        
+        echo "Notification sent successfully!"
+    
+    - name: Save event data as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: event-data
+        path: event_data.json
+        retention-days: 7
